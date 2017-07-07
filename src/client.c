@@ -16,6 +16,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netdb.h>
+#include <curses.h>
 
 #define BUFSIZE 1024
 
@@ -62,28 +63,58 @@ int main(int argc, char **argv) {
 	  exit(EXIT_FAILURE);
 	}
 
+	initscr();
+	//noecho();
+	nodelay(stdscr, TRUE);
+	cbreak();
+	keypad(stdscr, TRUE);
+	int ch;
+	int i = 0;
+	char rcv_buf[BUFSIZE];
 	/* we have connected to the server */
 	/* get message line from the user */
-	printf("Please enter msg: ");
-	bzero(buf, BUFSIZE);
-	fgets(buf, BUFSIZE, stdin);
+	while(1){
 
-	/* send the message line to the server */
-	n = write(sockfd, buf, strlen(buf));
-	if (n < 0){
-	  perror("ERROR writing to socket");
-	  exit(EXIT_FAILURE);
+		if ((ch = getch()) == ERR){
+
+		}
+		else{
+			rcv_buf[i++] = ch;
+			if(ch == '\n'){
+				rcv_buf[i] = '\0';
+				n = write(sockfd, rcv_buf, strlen(buf));
+				if (n < 0){
+				  perror("ERROR writing to socket");
+				  exit(EXIT_FAILURE);
+				}
+				i = 0;
+				bzero(rcv_buf, BUFSIZE);
+			}
+		}
+
+		//bzero(buf, BUFSIZE);
+		//fgets(buf, BUFSIZE, stdin);
+
+		/* send the message line to the server */
+		/*n = write(sockfd, buf, strlen(buf));
+		if (n < 0){
+		  perror("ERROR writing to socket");
+		  exit(EXIT_FAILURE);
+		} */
+
+		/* print the server's reply */
+		bzero(buf, BUFSIZE);
+		n = read(sockfd, buf, BUFSIZE);
+		if (n < 0){
+		  perror("ERROR reading from socket");
+		  exit(EXIT_FAILURE);
+		}
+		printf("%s\n", buf);
 	}
-
-	/* print the server's reply */
-	bzero(buf, BUFSIZE);
-	n = read(sockfd, buf, BUFSIZE);
-	if (n < 0){
-	  perror("ERROR reading from socket");
-	  exit(EXIT_FAILURE);
-	}
-	printf("Echo from server: %s", buf);
-
+	endwin();
 	close(sockfd);
 	return EXIT_SUCCESS;
 }
+
+
+
