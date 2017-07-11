@@ -19,8 +19,9 @@
 #include <netdb.h>
 #include <curses.h>
 #include <time.h>
-#include <pthread.h>
 #include <termios.h>
+#include <fcntl.h>
+
 
 #define BUFSIZE 1024
 
@@ -35,7 +36,6 @@ int main(int argc, char **argv) {
 	struct sockaddr_in serveraddr;
 	struct hostent *server;
 	char *hostname;	
-	//char buf[BUFSIZE];
 
 	/* check command line arguments */
 	if (argc != 3) {
@@ -71,69 +71,40 @@ int main(int argc, char **argv) {
 	  perror("ERROR connecting");
 	  exit(EXIT_FAILURE);
 	}
-
-	// Set up threads
-    pthread_t threads[2];
-    pthread_attr_t attr;
-    pthread_attr_init(&attr);
-    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
-
-    // Spawn the listen/receive deamons    
-    pthread_create(&threads[0], &attr, listener, NULL);
-    pthread_create(&threads[1], &attr, sender, NULL);
+	fcntl(sockfd, F_SETFL, fcntl(sockfd, F_GETFL, 0) | O_NONBLOCK); // set socket in non-blocking state
 
     // init ncurses
     initscr();
-    nodelay(stdscr, FALSE);				// getch will return ERR if there is no input 
-    //keypad(stdscr, TRUE);
-    noecho();							// don't echo chars
-    raw();								// don't wait for new line
+    nodelay(stdscr, TRUE);				// getch will return ERR if there is no input 
+    cbreak();							// don't wait for new line
+    noecho();							// don't echo chars  
+    clear(); 							/* Clear the screen */
 
     signal(SIGINT, sigint_handler);		// handle CTRL+C
-
-	while(1)
-		sleep(1);										
-	return EXIT_SUCCESS;
-}
-
-// Send message from keyboard to server
-void *sender(){
-	int n = 0;
-	char ch;	
-    while(1){	
+    int n = 0;
+    char ch;
+    char rcv_buf[BUFSIZE];	
+	while(1){
+		usleep(1000);
+		// send message from keyboard to server
 		ch = getch();
 		if (ch != ERR){
 			n = write(sockfd, &ch, 1);
 			if (n < 0){
 			  	perror("ERROR writing to socket");
 			  	endwin();
-				pthread_exit(NULL);
 				close(sockfd);
 		  		exit(EXIT_FAILURE);
 			}
-		}
-    }
-}
-
-// Listen for messages and display them
-void *listener(){
-    char rcv_buf[BUFSIZE];
-    int n = 0;
-    while(1) {
-        memset(rcv_buf, 0, BUFSIZE);
-        //Receive message from server
+		} 
+		// Listen for messages and display them
+		memset(rcv_buf, 0, BUFSIZE);
         n = read(sockfd, rcv_buf, BUFSIZE);
-		if (n < 0){
-		 	perror("ERROR reading from socket");
-		  	endwin();
-			pthread_exit(NULL);
-			close(sockfd);
-		  	exit(EXIT_FAILURE);
-		}   
-		write( STDOUT_FILENO, rcv_buf, strlen( rcv_buf ));
-    }
+		if (n > 0)
+		 	write( STDOUT_FILENO, rcv_buf, strlen( rcv_buf ));		 
+	}
+	return EXIT_SUCCESS;
 }
-
 
 // Catch SIGINT
 void sigint_handler(){
